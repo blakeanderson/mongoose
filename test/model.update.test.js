@@ -10,10 +10,14 @@ var start = require('./common')
   , Query = require('../lib/query')
   , Schema = mongoose.Schema
   , SchemaType = mongoose.SchemaType
-  , ObjectId = Schema.Types.ObjectId
+  , CastError = SchemaType.CastError
+  , ValidatorError = SchemaType.ValidatorError
+  , ValidationError = mongoose.Document.ValidationError
+  , ObjectId = Schema.ObjectId
   , DocumentObjectId = mongoose.Types.ObjectId
   , DocumentArray = mongoose.Types.DocumentArray
   , EmbeddedDocument = mongoose.Types.Embedded
+  , MongooseNumber = mongoose.Types.Number
   , MongooseArray = mongoose.Types.Array
   , MongooseError = mongoose.Error;
 
@@ -44,7 +48,7 @@ var BlogPost = new Schema({
   , numbers   : [Number]
   , owners    : [ObjectId]
   , comments  : [Comments]
-}, { strict: false });
+});
 
 BlogPost.virtual('titleWithAuthor')
   .get(function () {
@@ -68,7 +72,7 @@ mongoose.model('BlogPostForUpdates', BlogPost);
 
 var collection = 'blogposts_' + random();
 
-var strictSchema = new Schema({ name: String, x: { nested: String }});
+var strictSchema = new Schema({ name: String, x: { nested: String }}, { strict: true });
 strictSchema.virtual('foo').get(function () {
   return 'i am a virtual FOO!'
 });
@@ -575,7 +579,7 @@ describe('model: update:', function(){
   });
 
   describe('honors strict schemas', function(){
-    it('(gh-699)', function(done){
+    it('(gh-699)', function(){
       var db = start();
       var S = db.model('UpdateStrictSchema');
       db.close();
@@ -584,7 +588,6 @@ describe('model: update:', function(){
       assert.equal(false, doc);
       var doc = S.find()._castUpdate({ $unset: {x: 1}});
       assert.equal(1, Object.keys(doc.$unset).length);
-      done();
     });
 
     it('works', function(done){
@@ -623,7 +626,7 @@ describe('model: update:', function(){
 
   it('passes number of affected docs', function(done){
     var db = start()
-      , B = db.model('BlogPostForUpdates', 'wwwwowowo'+random())
+      , B = db.model('BlogPost', 'wwwwowowo'+random())
 
     B.create({ title: 'one'},{title:'two'},{title:'three'}, function (err) {
       assert.ifError(err);
@@ -670,66 +673,4 @@ describe('model: update:', function(){
     });
   });
 
-  it('handles $push with $ positionals (gh-1057)', function(done){
-    var db = start();
-
-    var taskSchema = new Schema({
-        name: String
-    })
-
-    var componentSchema = new Schema({
-        name: String
-      , tasks: [taskSchema]
-    });
-
-    var projectSchema = new Schema({
-        name: String
-      , components: [componentSchema]
-    });
-
-    var Project = db.model('1057-project', projectSchema, '1057-'+random());
-
-    Project.create({ name: 'my project' }, function (err, project) {
-      assert.ifError(err);
-      var pid = project.id;
-      var comp = project.components.create({ name: 'component' });
-      Project.update({ _id: pid }, { $push: { components: comp }}, function (err) {
-        assert.ifError(err);
-        var task = comp.tasks.create({ name: 'my task' });
-        Project.update({ _id: pid, 'components._id': comp._id }, { $push : { 'components.$.tasks': task }}, function (err) {
-          assert.ifError(err);
-          Project.findById(pid, function (err, proj) {
-            assert.ifError(err);
-            assert.ok(proj);
-            assert.equal(1, proj.components.length);
-            assert.equal('component', proj.components[0].name);
-            assert.equal(comp.id, proj.components[0].id);
-            assert.equal(1, proj.components[0].tasks.length);
-            assert.equal('my task', proj.components[0].tasks[0].name);
-            assert.equal(task.id, proj.components[0].tasks[0].id);
-            done();
-          })
-        });
-      });
-    });
-
-  })
-
-  it('handles nested paths starting with numbers (gh-1062)', function(done){
-    var db = start()
-    var schema = Schema({ counts: Schema.Types.Mixed });
-    var M = db.model('gh-1062', schema, '1062-'+random());
-    M.create({ counts: {} }, function (err, m) {
-      assert.ifError(err);
-      M.update({}, { $inc: { 'counts.1': 1, 'counts.1a': 10 }}, function (err, updated) {
-        assert.ifError(err);
-        M.findById(m, function (err, doc) {
-          assert.ifError(err);
-          assert.equal(1, doc.counts['1']);
-          assert.equal(10, doc.counts['1a']);
-          done();
-        });
-      });
-    })
-  })
 });

@@ -39,7 +39,7 @@ var UserBuffer = new Schema({
 
 describe('types.buffer', function(){
 
-  it('test that a mongoose buffer behaves and quacks like an buffer', function(done){
+  it('test that a mongoose buffer behaves and quacks like an buffer', function(){
     var a = new MongooseBuffer;
 
     assert.ok(a instanceof Buffer);
@@ -53,7 +53,6 @@ describe('types.buffer', function(){
     assert.equal(a.toString('utf8'), 'über');
     assert.equal(b.toString('utf8'), 'buffer shtuffs are neat');
     assert.equal(c.toString('utf8'), 'hello world');
-    done();
   });
 
   it('buffer validation', function (done) {
@@ -79,11 +78,11 @@ describe('types.buffer', function(){
           t.sub.push({ name: 'Friday Friday' });
           t.save(function (err) {
             assert.equal(err.message,'Validation failed');
-            assert.equal(err.errors['sub.0.buf'].type,'required');
+            assert.equal(err.errors.buf.type,'required');
             t.sub[0].buf = new Buffer("well well");
             t.save(function (err) {
               assert.equal(err.message,'Validation failed');
-              assert.equal(err.errors['sub.0.buf'].type,'valid failed');
+              assert.equal(err.errors.buf.type,'valid failed');
 
               t.sub[0].buf = new Buffer("well well well");
               t.validate(function (err) {
@@ -354,7 +353,7 @@ describe('types.buffer', function(){
     function reset (model) {
       // internal
       model._activePaths.clear('modify');
-      model.schema.requiredPaths().forEach(function (path) {
+      model.schema.requiredPaths.forEach(function (path) {
         model._activePaths.require(path);
       });
     }

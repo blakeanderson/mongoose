@@ -19,7 +19,7 @@ describe('collections:', function(){
       done();
     }
 
-    collection.insert({ }, { safe: true }, function(){
+    collection.insert({ }, function(){
       assert.ok(connected);
       inserted = true;
       db.close();
@@ -33,7 +33,7 @@ describe('collections:', function(){
     });
   })
 
-  it('methods should that throw (unimplemented)', function(done){
+  it('methods should that throw (unimplemented)', function(){
     var collection = new Collection('test', mongoose.connection)
       , thrown = false;
 
@@ -116,6 +116,5 @@ describe('collections:', function(){
 
     assert.ok(thrown);
     thrown = false;
-    done();
   })
 })

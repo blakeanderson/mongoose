@@ -10,9 +10,9 @@ var start = require('./common')
   , Query = require('../lib/query')
   , Schema = mongoose.Schema
   , SchemaType = mongoose.SchemaType
-  , CastError = mongoose.Error.CastError
-  , ValidatorError = mongoose.Error.ValidatorError
-  , ValidationError = mongoose.Error.ValidationError
+  , CastError = SchemaType.CastError
+  , ValidatorError = SchemaType.ValidatorError
+  , ValidationError = mongoose.Document.ValidationError
   , ObjectId = Schema.ObjectId
   , DocumentObjectId = mongoose.Types.ObjectId
   , DocumentArray = mongoose.Types.DocumentArray
@@ -123,7 +123,7 @@ describe('document modified', function(){
   });
 
   describe('isModified', function(){
-    it('should not throw with no argument', function(done){
+    it('should not throw with no argument', function(){
       var db = start();
       var BlogPost = db.model(modelName, collection);
       var post = new BlogPost;
@@ -137,10 +137,9 @@ describe('document modified', function(){
       }
 
       assert.equal(false, threw);
-      done();
     });
 
-    it('when modifying keys', function(done){
+    it('when modifying keys', function(){
       var db = start()
         , BlogPost = db.model(modelName, collection);
 
@@ -157,14 +156,13 @@ describe('document modified', function(){
       assert.equal(true, post.isModified('title'));
 
       assert.equal(false, post.isModified('date'));
-      post.set('date', new Date(post.date + 10));
+      post.set('date', new Date(post.date + 1));
       assert.equal(true, post.isModified('date'));
 
       assert.equal(false, post.isModified('meta.date'));
-      done();
     })
 
-    it('setting a key identically to its current value should not dirty the key', function(done){
+    it('setting a key identically to its current value should not dirty the key', function(){
       var db = start()
         , BlogPost = db.model(modelName, collection);
 
@@ -179,11 +177,10 @@ describe('document modified', function(){
       assert.equal(false, post.isModified('title'));
       post.set('title', 'Test');
       assert.equal(false, post.isModified('title'));
-      done();
     })
 
     describe('on DocumentArray', function(){
-      it('work', function (done) {
+      it('work', function () {
         var db = start()
           , BlogPost = db.model(modelName, collection);
 
@@ -203,9 +200,8 @@ describe('document modified', function(){
         assert.equal(true, post.isDirectModified('comments.0.title'));
 
         db.close();
-        done();
       })
-      it('with accessors', function(done){
+      it('with accessors', function(){
         var db = start()
           , BlogPost = db.model(modelName, collection);
 
@@ -224,12 +220,11 @@ describe('document modified', function(){
         assert.equal(true, post.isDirectModified('comments.0.body'));
 
         db.close();
-        done();
       })
     })
 
     describe('on MongooseArray', function(){
-      it('atomic methods', function(done){
+      it('atomic methods', function(){
         // COMPLETEME
         var db = start()
           , BlogPost = db.model(modelName, collection);
@@ -239,9 +234,8 @@ describe('document modified', function(){
         assert.equal(false, post.isModified('owners'));
         post.get('owners').push(new DocumentObjectId);
         assert.equal(true, post.isModified('owners'));
-        done();
       });
-      it('native methods', function(done){
+      it('native methods', function(){
         // COMPLETEME
         var db = start()
           , BlogPost = db.model(modelName, collection);
@@ -249,7 +243,6 @@ describe('document modified', function(){
         db.close();
         var post = new BlogPost;
         assert.equal(false, post.isModified('owners'));
-        done();
       });
     });
 
@@ -297,7 +290,7 @@ describe('document modified', function(){
           assert.equal(false, postRead.isModified('owners'));
           assert.equal(false, postRead.isModified('comments'));
           var arr = postRead.comments.slice();
-          arr[2] = postRead.comments.create({ title: 'index' });
+          arr[2] = { title: 'index' };
           postRead.comments = arr;
           assert.equal(true, postRead.isModified('comments'));
           done();

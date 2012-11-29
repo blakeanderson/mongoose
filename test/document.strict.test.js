@@ -10,10 +10,10 @@ var start = require('./common')
   , Query = require('../lib/query')
   , Schema = mongoose.Schema
   , SchemaType = mongoose.SchemaType
-  , CastError = mongoose.Error.CastError
-  , ValidatorError = mongoose.Error.ValidatorError
-  , ValidationError = mongoose.Error.ValidationError
-  , ObjectId = Schema.Types.ObjectId
+  , CastError = SchemaType.CastError
+  , ValidatorError = SchemaType.ValidatorError
+  , ValidationError = mongoose.Document.ValidationError
+  , ObjectId = Schema.ObjectId
   , DocumentObjectId = mongoose.Types.ObjectId
   , DocumentArray = mongoose.Types.DocumentArray
   , EmbeddedDocument = mongoose.Types.Embedded
@@ -28,12 +28,12 @@ describe('document: strict mode:', function(){
     var lax = new Schema({
         ts  : { type: Date, default: Date.now }
       , content: String
-    }, { strict: false });
+    });
 
     var strict = new Schema({
         ts  : { type: Date, default: Date.now }
       , content: String
-    });
+    }, { strict: true });
 
     var Lax = db.model('Lax', lax);
     var Strict = db.model('Strict', strict);
@@ -85,16 +85,16 @@ describe('document: strict mode:', function(){
       done();
     });
   })
-  it('nested doc', function(done){
+  it('nested doc', function(){
     var db = start();
 
     var lax = new Schema({
         name: { last: String }
-    }, { strict: false });
+    });
 
     var strict = new Schema({
         name: { last: String }
-    });
+    }, { strict: true });
 
     var Lax = db.model('NestedLax', lax, 'nestdoc'+random());
     var Strict = db.model('NestedStrict', strict, 'nestdoc'+random());
@@ -122,7 +122,6 @@ describe('document: strict mode:', function(){
     assert.ok(!('hack' in s.name));
     assert.ok(!s.name.hack);
     assert.ok(!s.shouldnt);
-    done();
   })
   it('sub doc', function(done){
     var db = start();
@@ -130,15 +129,15 @@ describe('document: strict mode:', function(){
     var lax = new Schema({
         ts  : { type: Date, default: Date.now }
       , content: String
-    }, { strict: false });
+    });
 
     var strict = new Schema({
         ts  : { type: Date, default: Date.now }
       , content: String
-    });
+    }, { strict: true });
 
-    var Lax = db.model('EmbeddedLax', new Schema({ dox: [lax] }, { strict: false }), 'embdoc'+random());
-    var Strict = db.model('EmbeddedStrict', new Schema({ dox: [strict] }, { strict: false }), 'embdoc'+random());
+    var Lax = db.model('EmbeddedLax', new Schema({ dox: [lax] }), 'embdoc'+random());
+    var Strict = db.model('EmbeddedStrict', new Schema({ dox: [strict] }), 'embdoc'+random());
 
     var l = new Lax({ dox: [{content: 'sample', rouge: 'data'}] });
     assert.equal(false, l.dox[0]._strictMode);
@@ -173,7 +172,7 @@ describe('document: strict mode:', function(){
     });
   })
 
-  it('virtuals', function(done){
+  it('virtuals', function(){
     var db = start();
 
     var getCount = 0
@@ -182,7 +181,7 @@ describe('document: strict mode:', function(){
     var strictSchema = new Schema({
         email: String
       , prop: String
-    });
+    }, {strict: true});
 
     strictSchema
     .virtual('myvirtual')
@@ -211,6 +210,5 @@ describe('document: strict mode:', function(){
 
     assert.equal(1, getCount);
     assert.equal(2, setCount);
-    done();
   })
 })

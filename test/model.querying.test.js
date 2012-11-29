@@ -10,9 +10,11 @@ var start = require('./common')
   , Query = require('../lib/query')
   , Schema = mongoose.Schema
   , SchemaType = mongoose.SchemaType
-  , ObjectId = Schema.Types.ObjectId
+  , CastError = SchemaType.CastError
+  , ObjectId = Schema.ObjectId
   , MongooseBuffer = mongoose.Types.Buffer
-  , DocumentObjectId = mongoose.Types.ObjectId;
+  , DocumentObjectId = mongoose.Types.ObjectId
+  , PolymorphicSchema = mongoose.PolymorphicSchema;
 
 /**
  * Setup.
@@ -50,15 +52,14 @@ mongoose.model('BlogPostB', BlogPostB);
 var collection = 'blogposts_' + random();
 
 var ModSchema = new Schema({
-    num: Number
-  , str: String
+  num: Number
 });
 mongoose.model('Mod', ModSchema);
 
 var geoSchema = new Schema({ loc: { type: [Number], index: '2d'}});
 
 describe('model: querying:', function(){
-  it('find returns a Query', function(done){
+  it('find returns a Query', function(){
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection);
 
@@ -78,10 +79,9 @@ describe('model: querying:', function(){
     assert.ok(BlogPostB.find({}, null, {}) instanceof Query);
 
     db.close();
-    done();
   });
 
-  it('findOne returns a Query', function(done){
+  it('findOne returns a Query', function(){
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection);
 
@@ -101,7 +101,6 @@ describe('model: querying:', function(){
     assert.ok(BlogPostB.findOne({}, null, {}) instanceof Query);
 
     db.close();
-    done();
   });
 
   it('an empty find does not hang', function(done){
@@ -173,12 +172,11 @@ describe('model: querying:', function(){
   });
 
   describe('count', function(){
-    it('returns a Query', function(done){
+    it('returns a Query', function(){
       var db = start()
         , BlogPostB = db.model('BlogPostB', collection);
       assert.ok(BlogPostB.count({}) instanceof Query);
       db.close();
-      done();
     });
 
     it('Query executes when you pass a callback', function(done){
@@ -228,13 +226,12 @@ describe('model: querying:', function(){
   });
 
   describe('distinct', function(){
-    it('returns a Query', function(done){
+    it('returns a Query', function(){
       var db = start()
         , BlogPostB = db.model('BlogPostB', collection);
 
       assert.ok(BlogPostB.distinct('title', {}) instanceof Query);
       db.close();
-      done();
     });
 
     it('executes when you pass a callback', function(done){
@@ -256,14 +253,13 @@ describe('model: querying:', function(){
   });
 
   describe('update', function(){
-    it('returns a Query', function(done){
+    it('returns a Query', function(){
       var db = start()
         , BlogPostB = db.model('BlogPostB', collection);
 
       assert.ok(BlogPostB.update({}, {}) instanceof Query);
       assert.ok(BlogPostB.update({}, {}, {}) instanceof Query);
       db.close();
-      done();
     });
 
     it('Query executes when you pass a callback', function(done){
@@ -611,23 +607,75 @@ describe('model: querying:', function(){
       });
     });
 
-    it('works with $elemMatch and $in combo (gh-1100)', function(done){
+    it('handles polymorphic querying', function(done) {
       var db = start()
-        , BlogPostB = db.model('BlogPostB', collection)
-        , id1 = new DocumentObjectId
-        , id2 = new DocumentObjectId
+        , collection = 'poly_' + random()
+        , polySchema = new PolymorphicSchema({
+          type : { type : PolymorphicSchema.SchemaDeterminant }
+        })
+        , schemaA = new Schema({ thingOne : Number, type : { type : String, default : 'PolyA' } })
+        , schemaB = new Schema({ thingTwo : String, type : { type : String, default : 'PolyB' } });
 
-      BlogPostB.create({owners: [id1, id2]}, function (err, created) {
+      polySchema.sub('PolyA', schemaA);
+      polySchema.sub('PolyB', schemaB);
+
+      var poly = db.model('Poly', polySchema, collection)
+        , A = poly.sub('PolyA')
+        , B = poly.sub('PolyB');
+
+      var newA = new A({ thingOne : 3 });
+      var newB = new B({ thingTwo : 'four' });
+
+      var queries = 3;
+      var finish = function(cb) {
+        return function(err, res) {
+          try {
+            assert.strictEqual(null, err, err && err.stack);
+            cb(res);
+          } catch(e) {
+            db.close();
+            throw e;
+          }
+
+          if (!--queries) {
+            db.close();
+            done();
+          }
+        };
+      };
+      function checkA(model) {
+        assert.ok(model instanceof A);
+        assert.strictEqual('PolyA', model.type);
+        assert.strictEqual(3, model.thingOne.valueOf());
+        assert.strictEqual(undefined, model.thingTwo);
+      }
+      function checkB(model) {
+        assert.ok(model instanceof B);
+        assert.strictEqual('PolyB', model.type);
+        assert.strictEqual(undefined, model.thingOne);
+        assert.strictEqual('four', model.thingTwo.valueOf());
+      }
+
+      newA.save(function(err) {
         assert.ifError(err);
-        BlogPostB.findOne({owners: {'$elemMatch': { $in: [id2.toString()] }}}, function (err, found) {
-          db.close();
+        newB.save(function(err) {
           assert.ifError(err);
-          assert.ok(found);
-          assert.equal(created.id, found.id);
-          done();
+
+          poly.find({}, finish(function(models) {
+            assert.strictEqual(2, models.length);
+            var aIsFirst = models[0].thingOne ? true : false;
+            var foundA = models[ aIsFirst ? 0 : 1 ];
+            var foundB = models[ aIsFirst ? 1 : 0 ];
+
+            checkA(foundA);
+            checkB(foundB);
+          }));
+          poly.findOne({ thingOne: 3 }, finish(checkA));
+          poly.findById(newB.get('_id'), finish(checkB));
+
         });
       });
-    })
+    });
   });
 
   describe('findById', function () {
@@ -706,7 +754,7 @@ describe('model: querying:', function(){
           done();
         });
 
-        BlogPostB.findById(post.get('_id'), '-slug', function (err, doc) {
+        BlogPostB.findById(post.get('_id'), {'slug':0}, function (err, doc) {
           assert.ifError(err);
           assert.equal(true, doc.isInit('title'));
           assert.equal(false, doc.isInit('slug'));
@@ -977,19 +1025,24 @@ describe('model: querying:', function(){
       });
     });
 
-    it('works with $elemMatch (gh-1100)', function(done){
+    it('works with $elemMatch', function(done){
       var db = start()
         , BlogPostB = db.model('BlogPostB', collection)
-        , id1 = new DocumentObjectId
-        , id2 = new DocumentObjectId
+        , dateAnchor = +new Date;
 
-      BlogPostB.create({owners: [id1, id2]}, function (err, createdAfter) {
+      BlogPostB.create({comments: [{title: 'elemMatch', date: dateAnchor + 5}]}, function (err, createdAfter) {
         assert.ifError(err);
-        BlogPostB.find({owners: {'$elemMatch': { $in: [id2.toString()] }}}, function (err, found) {
-          db.close();
+        BlogPostB.create({comments: [{title: 'elemMatch', date: dateAnchor - 5}]}, function (err, createdBefore) {
           assert.ifError(err);
-          assert.equal(1, found.length);
-          done();
+          BlogPostB.find({'comments': {'$elemMatch': {title: 'elemMatch', date: {$gt: dateAnchor}}}}, 
+            function (err, found) {
+              assert.ifError(err);
+              assert.equal(1, found.length);
+              assert.equal(found[0]._id.toString(), createdAfter._id);
+              db.close();
+              done();
+            }
+          );
         });
       });
     })
@@ -1366,7 +1419,7 @@ describe('model: querying:', function(){
 
         pending = 2;
 
-        D.find({ 'dt': { $gte: '2011-03-30', $lte: '2011-04-01' }}).sort('dt').exec(function (err, docs) {
+        D.find({ 'dt': { $gte: '2011-03-30', $lte: '2011-04-01' }}).sort('dt', 1).exec(function (err, docs) {
           if (!--pending) {
             db.close();
             done();
@@ -1379,7 +1432,7 @@ describe('model: querying:', function(){
           assert.equal(false, docs.some(function (d) { return '2011-04-02' === d.dt }));
         });
 
-        D.find({ 'dt': { $gt: '2011-03-30', $lt: '2011-04-02' }}).sort('dt').exec(function (err, docs) {
+        D.find({ 'dt': { $gt: '2011-03-30', $lt: '2011-04-02' }}).sort('dt', 1).exec(function (err, docs) {
           if (!--pending) {
             db.close();
             done();
@@ -1459,7 +1512,7 @@ describe('model: querying:', function(){
             assert.ifError(err);
             BlogPostB
             .where('meta.visitors').gt(99).lt(301)
-            .sort('-meta.visitors')
+            .sort('meta.visitors', -1)
             .find( function (err, found) {
               assert.ifError(err);
               assert.equal(3, found.length);
@@ -1575,8 +1628,6 @@ describe('model: querying:', function(){
     });
 
     it('with Dates', function(done){
-      this.timeout(3000);
-      // this.slow(2000);
       var db = start()
 
       var SSchema = new Schema({ d: Date });
@@ -1615,53 +1666,6 @@ describe('model: querying:', function(){
       });
     });
   });
-
-  describe('and', function(){
-    it('works with queries gh-1188', function(done){
-      var db = start();
-      var B = db.model('BlogPostB');
-
-      B.create({ title: 'and operator', published: false, author: 'Me' }, function (err, doc) {
-        assert.ifError(err);
-
-        B.find({ $and: [{ title: 'and operator' }] }, function (err, docs) {
-          assert.ifError(err);
-          assert.equal(1, docs.length);
-
-          B.find({ $and: [{ title: 'and operator' }, { published: true }] }, function (err, docs) {
-            assert.ifError(err);
-            assert.equal(0, docs.length);
-
-            B.find({ $and: [{ title: 'and operator' }, { published: false }] }, function (err, docs) {
-              assert.ifError(err);
-              assert.equal(1, docs.length);
-
-              var query = B.find()
-              query.and([
-                  { title: 'and operator', published: false }
-                , { author: 'Me' }
-              ])
-              query.exec(function (err, docs) {
-                assert.ifError(err);
-                assert.equal(1, docs.length);
-
-                var query = B.find()
-                query.and([
-                    { title: 'and operator', published: false }
-                  , { author: 'You' }
-                ])
-                query.exec(function (err, docs) {
-                  assert.ifError(err);
-                  assert.equal(0, docs.length);
-                  done();
-                });
-              });
-            });
-          });
-        });
-      })
-    })
-  })
 });
 
 describe('buffers', function(){
@@ -1927,50 +1931,3 @@ describe('geo-spatial', function(){
   })
 });
 
-describe('lean option:', function(){
-  it('find', function(done){
-    var db = start()
-      , BlogPostB = db.model('BlogPostB', collection)
-      , title = 'Wooooot ' + random();
-
-    var post = new BlogPostB();
-    post.set('title', title);
-
-    post.save(function (err) {
-      assert.ifError(err);
-      BlogPostB.find({title : title}).lean().exec(function(err, docs){
-        assert.ifError(err);
-        assert.equal(docs.length, 1);
-        assert.strictEqual(docs[0] instanceof mongoose.Document, false);
-        BlogPostB.find({title : title}, null, { lean : true }, function(err, docs){
-          assert.ifError(err);
-          assert.equal(docs.length, 1);
-          assert.strictEqual(docs[0] instanceof mongoose.Document, false);
-          db.close();
-          done();
-        });
-      });
-    });
-  });
-
-  it('findOne', function(done){
-    var db = start()
-      , BlogPostB = db.model('BlogPostB', collection)
-      , title = 'Wooooot ' + random();
-
-    var post = new BlogPostB();
-    post.set('title', title);
-
-    post.save(function (err) {
-      assert.ifError(err);
-      BlogPostB.findOne({title : title}, null, { lean : true }, function(err, doc){
-        db.close();
-        assert.ifError(err);
-        assert.ok(doc);
-        assert.strictEqual(false, doc instanceof mongoose.Document);
-        done();
-      });
-    });
-  });
-
-})

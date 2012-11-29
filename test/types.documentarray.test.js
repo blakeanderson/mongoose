@@ -37,7 +37,7 @@ function TestDoc (schema) {
       title: { type: String }
   });
 
-  Subdocument.prototype._setSchema(schema || SubSchema);
+  Subdocument.prototype.schema = schema || SubSchema;
 
   return Subdocument;
 }
@@ -47,7 +47,7 @@ function TestDoc (schema) {
  */
 
 describe('types.documentarray', function(){
-  it('behaves and quakcs like an array', function(done){
+  it('behaves and quakcs like an array', function(){
     var a = new MongooseDocumentArray();
 
     assert.ok(a instanceof Array);
@@ -60,10 +60,9 @@ describe('types.documentarray', function(){
     var b = new MongooseArray([1,2,3,4]);
     assert.equal('object', typeof b);
     assert.equal(Object.keys(b.toObject()).length,4);
-    done();
   });
 
-  it('#id', function(done){
+  it('#id', function(){
     var Subdocument = TestDoc();
 
     var sub1 = new Subdocument();
@@ -127,30 +126,10 @@ describe('types.documentarray', function(){
     }
     assert.equal(false, threw);
 
-    // test the _id option, noId is deprecated
-    var NoId = new Schema({
-        title: { type: String }
-    }, { _id: false });
-
-    var Subdocument = TestDoc(NoId);
-
-    var sub4 = new Subdocument();
-    sub4.title = 'rock-n-roll';
-
-    var a = new MongooseDocumentArray([sub4])
-      , threw = false;
-    try {
-      a.id('i better not throw');
-    } catch (err) {
-      threw = err;
-    }
-    assert.equal(false, threw);
-
-    done();
   })
 
   describe('inspect', function(){
-    it('works with bad data', function(done){
+    it('works with bad data', function(){
       var threw = false;
       var a = new MongooseDocumentArray([null]);
       try {
@@ -160,12 +139,11 @@ describe('types.documentarray', function(){
         console.error(err.stack);
       }
       assert.ok(!threw);
-      done();
     })
   })
 
   describe('toObject', function(){
-    it('works with bad data', function(done){
+    it('works with bad data', function(){
       var threw = false;
       var a = new MongooseDocumentArray([null]);
       try {
@@ -175,72 +153,6 @@ describe('types.documentarray', function(){
         console.error(err.stack);
       }
       assert.ok(!threw);
-      done();
-    })
-  })
-
-  describe('EmbeddedDocumentArray', function(){
-    describe('create()', function(){
-      it('works', function(done){
-        var a = new MongooseDocumentArray([]);
-        assert.equal('function', typeof a.create);
-
-        var schema = new Schema({ docs: [new Schema({ name: 'string' })] });
-        var T = mongoose.model('embeddedDocument#create_test', schema, 'asdfasdfa'+ random());
-        var t = new T;
-        assert.equal('function', typeof t.docs.create);
-        var subdoc = t.docs.create({ name: 100 });
-        assert.ok(subdoc._id);
-        assert.equal(subdoc.name, '100');
-        assert.ok(subdoc instanceof EmbeddedDocument);
-        done();
-      })
-    })
-
-    describe('push()', function(){
-      it('does not re-cast instances of its embedded doc xxxxxx', function(done){
-        var db = start();
-
-        var child = new Schema({ name: String, date: Date });
-        child.pre('save', function (next) {
-          this.date = new Date;
-          next();
-        });
-        var schema = Schema({ children: [child] });
-        var M = db.model('embeddedDocArray-push-re-cast', schema, 'edarecast-'+random());
-        var m = new M;
-        m.save(function (err) {
-          assert.ifError(err);
-          M.findById(m._id, function (err, doc) {
-            assert.ifError(err);
-            var c = doc.children.create({ name: 'first' })
-            assert.equal(undefined, c.date);
-            doc.children.push(c);
-            assert.equal(undefined, c.date);
-            doc.save(function (err) {
-              assert.ifError(err);
-              assert.ok(doc.children[doc.children.length-1].date);
-              assert.equal(c.date, doc.children[doc.children.length-1].date);
-
-              doc.children.push(c);
-              doc.children.push(c);
-
-              doc.save(function (err) {
-                assert.ifError(err);
-                M.findById(m._id, function (err, doc) {
-                  db.close()
-                  assert.ifError(err);
-                  assert.equal(3, doc.children.length);
-                  doc.children.forEach(function (child) {
-                    assert.equal(doc.children[0].id, child.id);
-                  })
-                  done();
-                })
-              })
-            })
-          })
-        })
-      })
     })
   })
 
@@ -257,11 +169,12 @@ describe('types.documentarray', function(){
 
     var db = start()
       , Post = db.model('docarray-BlogPost', BlogPost, collection)
+      , Comment = db.model('docarray-Comment', Comments, collection)
 
     var p =new Post({ title: "comment nesting" });
-    var c1 = p.comments.create({ title: "c1" });
-    var c2 = p.comments.create({ title: "c2" });
-    var c3 = p.comments.create({ title: "c3" });
+    var c1 =new Comment({ title: "c1" });
+    var c2 = new Comment({ title: "c2" });
+    var c3 = new Comment({ title: "c3" });
 
     p.comments.push(c1);
     c1.comments.push(c2);
@@ -273,7 +186,7 @@ describe('types.documentarray', function(){
       Post.findById(p._id, function (err, p) {
         assert.ifError(err);
 
-        var c4= p.comments.create({ title: "c4" });
+        var c4= new Comment({ title: "c4" });
         p.comments[0].comments[0].comments[0].comments.push(c4);
         p.save(function (err) {
           assert.ifError(err);

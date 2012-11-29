@@ -54,7 +54,7 @@ var schema = new Schema({
     }
   , em: [em]
 });
-TestDocument.prototype._setSchema(schema);
+TestDocument.prototype.schema = schema;
 
 schema.virtual('nested.agePlus2').get(function (v) {
   return this.nested.age + 2;
@@ -222,7 +222,7 @@ describe('document: hooks:', function () {
     });
   });
 
-  it('mutating incoming args via middleware', function(done){
+  it('mutating incoming args via middleware', function(){
     var doc = new TestDocument();
 
     doc.pre('set', function(next, path, val){
@@ -231,7 +231,6 @@ describe('document: hooks:', function () {
 
     doc.set('test', 'me');
     assert.equal('altered-me', doc.test);
-    done();
   });
 
   it('test hooks system errors from a parallel hook', function(done){
@@ -298,50 +297,10 @@ describe('document: hooks:', function () {
     var s = new S({ name: "test" });
     s.e = [{ text: 'hi' }];
     s.save(function (err) {
-      assert.ifError(err);
-
-      S.findById(s.id, function (err ,s) {
-        assert.ifError(err);
-
-        s.e = [{ text: 'bye' }];
-        s.save(function (err) {
-          assert.ifError(err);
-
-          S.findById(s.id, function (err, s) {
-            db.close();
-            assert.ifError(err);
-            assert.equal('bye', s.e[0].text);
-            done();
-          })
-        })
-      })
-    });
-  });
-
-  it('pre save hooks on sub-docs should not exec after validation errors', function(done){
-    var db = start();
-    var presave = false;
-
-    var child = new Schema({ text: { type: String, required: true }});
-
-    child.pre('save', function (next) {
-      presave = true;
-      next();
-    });
-
-    var schema = new Schema({
-        name: String
-      , e: [child]
-    });
-
-    var S = db.model('docArrayWithHookedSave', schema);
-    var s = new S({ name: 'hi', e: [{}] });
-    s.save(function (err) {
-      assert.ok(err);
-      assert.ok(err.errors['e.0.text']);
-      assert.equal(false, presave);
+      db.close();
+      assert.ok(!err);
       done();
     });
-  })
+  });
 
 });

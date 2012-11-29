@@ -10,7 +10,10 @@ var start = require('./common')
   , Query = require('../lib/query')
   , Schema = mongoose.Schema
   , SchemaType = mongoose.SchemaType
-  , ObjectId = Schema.Types.ObjectId
+  , CastError = SchemaType.CastError
+  , ValidatorError = SchemaType.ValidatorError
+  , ValidationError = mongoose.Document.ValidationError
+  , ObjectId = Schema.ObjectId
   , DocumentObjectId = mongoose.Types.ObjectId
   , DocumentArray = mongoose.Types.DocumentArray
   , EmbeddedDocument = mongoose.Types.Embedded
@@ -117,8 +120,7 @@ describe('model middleware', function(){
       next();
     });
 
-    schema.post('init', function (doc) {
-      assert.ok(doc instanceof mongoose.Document);
+    schema.post('init', function () {
       ++postinit;
     });
 
@@ -143,57 +145,4 @@ describe('model middleware', function(){
       });
     });
   });
-
-  it('validate + remove', function(done){
-    var schema = new Schema({
-        title: String
-    });
-
-    var preValidate = 0
-      , postValidate = 0
-      , preRemove = 0
-      , postRemove = 0
-
-    schema.pre('validate', function (next) {
-      ++preValidate;
-      next();
-    });
-
-    schema.pre('remove', function (next) {
-      ++preRemove;
-      next();
-    });
-
-    schema.post('validate', function (doc) {
-      assert.ok(doc instanceof mongoose.Document);
-      ++postValidate;
-    });
-
-    schema.post('remove', function (doc) {
-      assert.ok(doc instanceof mongoose.Document);
-      ++postRemove;
-    });
-
-    var db = start()
-      , Test = db.model('TestPostValidateMiddleware', schema);
-
-    var test = new Test({ title: "banana" });
-
-    test.save(function(err){
-      assert.ifError(err);
-      assert.equal(1, preValidate);
-      assert.equal(1, postValidate);
-      assert.equal(0, preRemove);
-      assert.equal(0, postRemove);
-      test.remove(function (err) {
-        db.close();
-        assert.ifError(err);
-        assert.equal(1, preValidate);
-        assert.equal(1, postValidate);
-        assert.equal(1, preRemove);
-        assert.equal(1, postRemove);
-        done();
-      })
-    });
-  })
 });

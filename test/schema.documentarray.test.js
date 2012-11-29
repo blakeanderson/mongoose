@@ -14,7 +14,7 @@ var start = require('./common')
  */
 
 describe('schema.documentarray', function(){
-  it('defaults should be preserved', function(done){
+  it('defaults should be preserved', function(){
     var child = new Schema({ title: String })
 
     var schema1 = new Schema({ x: { type: [child], default: [{ title: 'Prometheus'}] }});
@@ -31,6 +31,5 @@ describe('schema.documentarray', function(){
       assert.equal(1, m.x.length);
       assert.equal('Prometheus', m.x[0].title);
     });
-    done();
   })
 })
